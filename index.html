@@ -189,34 +189,30 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
 /* MOBILE RESPONSIVO */
 @media (max-width: 900px){
 
-  html, body{
+  body{
     display:flex;
     flex-direction:column;
-    height:auto;
-    overflow:auto;
+    height:100dvh; /* melhor que 100vh no mobile */
+    overflow:hidden;
   }
 
   header{
+    flex-shrink:0;
     position:sticky;
     top:0;
     z-index:10;
   }
 
-  #panel{
-    order:2;
-    width:100%;
-    max-height:none;
-    border-right:none;
-    border-top:1px solid var(--bord);
-    overflow:visible; /* permite scroll da página inteira */
+  #preview-wrap{
+    flex:0 0 45%;
+    min-height:250px;
   }
 
-  #preview-wrap{
-    order:1;
-    width:100%;
-    height:50vh; /* garante espaço pro 3D */
-    min-height:300px;
-    overflow:visible;
+  #panel{
+    flex:1;
+    overflow-y:auto;
+    border-right:none;
+    border-top:1px solid var(--bord);
   }
 
   #cv{
@@ -224,28 +220,6 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
     height:100% !important;
   }
 
-  #ptbar{
-    font-size:10px;
-    padding:6px;
-  }
-
-  #sbar{
-    font-size:10px;
-  }
-
-  /* Ajuste dos inputs para toque */
-  input[type=range]{
-    height:6px;
-  }
-
-  .btn-main{
-    font-size:16px;
-    padding:14px;
-  }
-
-  .sec{
-    padding:10px;
-  }
 }
 </style>
 </head>
