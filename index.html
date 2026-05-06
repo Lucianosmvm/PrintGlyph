@@ -189,7 +189,7 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
 /* MOBILE RESPONSIVO */
 @media (max-width: 900px){
 
-  body{
+  html, body{
     display:flex;
     flex-direction:column;
     height:auto;
@@ -208,6 +208,7 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
     max-height:none;
     border-right:none;
     border-top:1px solid var(--bord);
+    overflow:visible; /* permite scroll da página inteira */
   }
 
   #preview-wrap{
@@ -215,6 +216,7 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
     width:100%;
     height:50vh; /* garante espaço pro 3D */
     min-height:300px;
+    overflow:visible;
   }
 
   #cv{
