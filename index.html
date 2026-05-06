@@ -425,15 +425,13 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
     <div style="font-size:10px;color:var(--txt2);margin-bottom:4px">Clique para adicionar • arraste no canvas para posicionar</div>
     <div class="deco-grid" id="deco-grid">
       <div class="deco-btn" title="Estrela"    onclick="addDeco('star','Estrela')">⭐</div>
-      <div class="deco-btn" title="Coração"   onclick="addDeco('heart','Coração')">❤️</div>
-      <div class="deco-btn" title="Diamante"  onclick="addDeco('diamond','Diamante')">💎</div>
-      <div class="deco-btn" title="Nuvem"     onclick="addDeco('cloud','Nuvem')">☁️</div>
-      <div class="deco-btn" title="Flor"      onclick="addDeco('flower','Flor')">🌸</div>
-      <div class="deco-btn" title="Sol"       onclick="addDeco('sun','Sol')">☀️</div>
-      <div class="deco-btn" title="Lua"       onclick="addDeco('moon','Lua')">🌙</div>
-      <div class="deco-btn" title="Borboleta" onclick="addDeco('butterfly','Borboleta')">🦋</div>
-      <div class="deco-btn" title="Pássaro"   onclick="addDeco('bird','Pássaro')">🐦</div>
-      <div class="deco-btn" title="Arco-íris" onclick="addDeco('rainbow','Arco-íris')">🌈</div>
+      <div class="deco-btn" title="Coração"    onclick="addDeco('heart','Coração')">❤️</div>
+      <div class="deco-btn" title="Diamante"   onclick="addDeco('diamond','Diamante')">💎</div>
+      <div class="deco-btn" title="Nuvem"      onclick="addDeco('cloud','Nuvem')">☁️</div>
+      <div class="deco-btn" title="Flor"       onclick="addDeco('flower','Flor')">🌸</div>
+      <div class="deco-btn" title="Sol"        onclick="addDeco('sun','Sol')">☀️</div>
+      <div class="deco-btn" title="Borboleta"  onclick="addDeco('butterfly','Borboleta')">🦋</div>
+      <div class="deco-btn" title="Arco-íris"  onclick="addDeco('rainbow','Arco-íris')">🌈</div>
     </div>
     <div style="margin-top:6px">
       <label style="margin-top:0">SVG → 3D</label>
@@ -978,166 +976,234 @@ let decoIdCounter = 0;
 
 // ── Shape generators (return THREE.Shape) ──
 function makeStarShape(r){
-  // 5-point star, top point up
-  const s=new THREE.Shape();
-  const pts=10, inner=r*.42;
-  for(let i=0;i<pts;i++){
-    const a = (Math.PI*2/pts)*i - Math.PI/2;
-    const ri = i%2===0 ? r : inner;
-    const x=Math.cos(a)*ri, y=Math.sin(a)*ri;
-    i===0 ? s.moveTo(x,y) : s.lineTo(x,y);
+  // 5-point star with top point at +Y
+  const s = new THREE.Shape();
+  const n = 5, inner = r * 0.4;
+  for(let i = 0; i < n * 2; i++){
+    const a = (Math.PI / n) * i - Math.PI / 2;
+    const ri = i % 2 === 0 ? r : inner;
+    const x = Math.cos(a) * ri, y = Math.sin(a) * ri;
+    i === 0 ? s.moveTo(x, y) : s.lineTo(x, y);
   }
-  s.closePath(); return s;
+  s.closePath();
+  return s;
 }
+
 function makeHeartShape(r){
-  // Tip at bottom (-Y), two bumps at top (+Y)
-  const s=new THREE.Shape();
-  s.moveTo(0, -r);
-  s.bezierCurveTo( r*1.2, -r*0.5,  r*1.4,  r*0.4,   0,    r*0.9);
-  s.bezierCurveTo(-r*1.4,  r*0.4, -r*1.2, -r*0.5,   0,   -r);
-  s.closePath(); return s;
-}
-function makeDiamondShape(r){
-  const s=new THREE.Shape();
-  // Classic gem: top facet, wide middle, bottom point
-  s.moveTo(0, r);           // top center
-  s.lineTo(r*0.9, r*0.2);   // top right
-  s.lineTo(r*0.6, -r*0.1);  // mid right
-  s.lineTo(r*0.15, -r);     // bottom right
-  s.lineTo(-r*0.15, -r);    // bottom left
-  s.lineTo(-r*0.6, -r*0.1); // mid left
-  s.lineTo(-r*0.9, r*0.2);  // top left
-  s.closePath(); return s;
-}
-function makeCloudShape(r){
-  const s=new THREE.Shape();
-  // Flat bottom, bumps on top
-  s.moveTo(-r*0.9, -r*0.25);
-  s.lineTo( r*0.9, -r*0.25);
-  // right edge up
-  s.lineTo( r*0.9,  r*0.05);
-  // right bump
-  s.absarc( r*0.6,  r*0.05, r*0.28, 0, Math.PI, false);
-  // center-right bump (bigger)
-  s.absarc( r*0.2,  r*0.12, r*0.38, 0, Math.PI, false);
-  // center-left bump (tallest)
-  s.absarc(-r*0.2,  r*0.05, r*0.42, 0, Math.PI, false);
-  // left bump
-  s.absarc(-r*0.65, r*0.0,  r*0.27, 0, Math.PI, false);
-  s.lineTo(-r*0.9,  r*0.05);
-  s.lineTo(-r*0.9, -r*0.25);
-  s.closePath(); return s;
-}
-function makeFlowerShape(r){
-  const shapes=[];
-  // 5 rounded petals
-  for(let i=0;i<5;i++){
-    const a = (Math.PI*2/5)*i - Math.PI/2;
-    const cx=Math.cos(a)*r*0.6, cy=Math.sin(a)*r*0.6;
-    const petal=new THREE.Shape();
-    petal.absarc(cx, cy, r*0.38, 0, Math.PI*2, false);
-    shapes.push(petal);
+  // Parametric heart curve: x=16sin³t, y=13cos(t)-5cos(2t)-2cos(3t)-cos(4t)
+  // Scaled to fit radius r. Max extents: x±16, y from -17 to ~12
+  const s = new THREE.Shape();
+  const N = 64;
+  const scaleX = r / 16;
+  const scaleY = r / 14; // slightly taller scale
+  for(let i = 0; i <= N; i++){
+    const t = (Math.PI * 2 * i) / N;
+    const x =  16 * Math.pow(Math.sin(t), 3);
+    const y =  13 * Math.cos(t)
+              - 5  * Math.cos(2 * t)
+              - 2  * Math.cos(3 * t)
+              -      Math.cos(4 * t);
+    const px = x * scaleX;
+    const py = y * scaleY;
+    i === 0 ? s.moveTo(px, py) : s.lineTo(px, py);
   }
-  // Center circle
-  const center=new THREE.Shape();
-  center.absarc(0, 0, r*0.28, 0, Math.PI*2, false);
+  s.closePath();
+  return s;
+}
+
+function makeDiamondShape(r){
+  // Gem cut: wide top facet, tapers to bottom point
+  const s = new THREE.Shape();
+  s.moveTo(0,      r);        // top
+  s.lineTo( r,     r * 0.3);  // top-right
+  s.lineTo( r * 0.65, -r * 0.1); // mid-right
+  s.lineTo( r * 0.2,  -r);    // bottom-right
+  s.lineTo(-r * 0.2,  -r);    // bottom-left
+  s.lineTo(-r * 0.65, -r * 0.1);
+  s.lineTo(-r,     r * 0.3);
+  s.closePath();
+  return s;
+}
+
+function makeCloudShape(r){
+  // Cloud built from circle points — guaranteed correct winding
+  const s = new THREE.Shape();
+  const circlePts = (cx, cy, cr, startA, endA, steps) => {
+    const pts = [];
+    for(let i = 0; i <= steps; i++){
+      const a = startA + (endA - startA) * i / steps;
+      pts.push([cx + Math.cos(a) * cr, cy + Math.sin(a) * cr]);
+    }
+    return pts;
+  };
+  // Bottom-right corner
+  const br = circlePts( r * 0.78, -r * 0.18, r * 0.22, -Math.PI/2, Math.PI/2, 8);
+  // Right bump
+  const rb = circlePts( r * 0.52,  r * 0.18, r * 0.30, -Math.PI*0.1, Math.PI*1.1, 10);
+  // Center-right bump
+  const cb = circlePts( r * 0.12,  r * 0.28, r * 0.38, -Math.PI*0.05, Math.PI*1.05, 12);
+  // Center-left bump (tallest)
+  const lb = circlePts(-r * 0.32,  r * 0.22, r * 0.34, -Math.PI*0.05, Math.PI*1.05, 12);
+  // Left bump (small)
+  const llb = circlePts(-r * 0.70,  r * 0.10, r * 0.24, -Math.PI*0.1, Math.PI*1.1, 10);
+  // Bottom-left corner
+  const bl = circlePts(-r * 0.78, -r * 0.18, r * 0.22, Math.PI/2, Math.PI*1.5, 8);
+
+  const all = [...br, ...rb, ...cb, ...lb, ...llb, ...bl];
+  s.moveTo(all[0][0], all[0][1]);
+  for(let i = 1; i < all.length; i++) s.lineTo(all[i][0], all[i][1]);
+  // Bottom flat
+  s.lineTo( r * 0.78, -r * 0.40);
+  s.lineTo(-r * 0.78, -r * 0.40);
+  s.closePath();
+  return s;
+}
+
+function makeFlowerShape(r){
+  // 5 oval petals + center disk — all as separate shapes
+  const shapes = [];
+  for(let i = 0; i < 5; i++){
+    const a = (Math.PI * 2 / 5) * i - Math.PI / 2;
+    const cx = Math.cos(a) * r * 0.58;
+    const cy = Math.sin(a) * r * 0.58;
+    const p = new THREE.Shape();
+    p.absarc(cx, cy, r * 0.36, 0, Math.PI * 2, false);
+    shapes.push(p);
+  }
+  const center = new THREE.Shape();
+  center.absarc(0, 0, r * 0.3, 0, Math.PI * 2, false);
   shapes.push(center);
   return shapes;
 }
-function makeSunShape(r){
-  const s=new THREE.Shape();
-  // Circle center
-  s.absarc(0,0,r*.45,0,Math.PI*2,false);
-  return s; // we'll add rays separately via extra shapes
-}
+
 function makeSunShapes(r){
-  const shapes=[];
-  // Center circle
-  const c=new THREE.Shape();
-  c.absarc(0,0,r*0.42,0,Math.PI*2,false);
-  shapes.push(c);
-  // 8 tapered rays
-  for(let i=0;i<8;i++){
-    const a = (Math.PI/4)*i;
-    const cos=Math.cos(a), sin=Math.sin(a);
-    const px=-sin, py=cos; // perpendicular
-    const w1=r*0.07, w2=r*0.03;
-    const r0=r*0.48, r1=r*0.92;
-    const ray=new THREE.Shape();
-    ray.moveTo(cos*r0+px*w1, sin*r0+py*w1);
-    ray.lineTo(cos*r1+px*w2, sin*r1+py*w2);
-    ray.lineTo(cos*r1-px*w2, sin*r1-py*w2);
-    ray.lineTo(cos*r0-px*w1, sin*r0-py*w1);
+  const shapes = [];
+  // Center disk
+  const disk = new THREE.Shape();
+  disk.absarc(0, 0, r * 0.38, 0, Math.PI * 2, false);
+  shapes.push(disk);
+  // 8 diamond-shaped rays
+  for(let i = 0; i < 8; i++){
+    const a = (Math.PI / 4) * i;
+    const cos = Math.cos(a), sin = Math.sin(a);
+    const perp = [-sin, cos]; // perpendicular unit
+    const r0 = r * 0.45, r1 = r * 0.95;
+    const w0 = r * 0.09, w1 = r * 0.02;
+    const ray = new THREE.Shape();
+    ray.moveTo(cos*r0 + perp[0]*w0, sin*r0 + perp[1]*w0);
+    ray.lineTo(cos*r1 + perp[0]*w1, sin*r1 + perp[1]*w1);
+    ray.lineTo(cos*r1 - perp[0]*w1, sin*r1 - perp[1]*w1);
+    ray.lineTo(cos*r0 - perp[0]*w0, sin*r0 - perp[1]*w0);
     ray.closePath();
     shapes.push(ray);
   }
   return shapes;
 }
+
 function makeMoonShape(r){
-  // Crescent: outer circle minus inner offset circle
-  const s=new THREE.Shape();
-  s.absarc(0, 0, r, 0, Math.PI*2, false);
-  const hole = new THREE.Path();
-  hole.absarc(r*0.35, r*0.1, r*0.75, 0, Math.PI*2, true);
-  s.holes.push(hole);
+  // Crescent as a single closed polygon — no holes needed
+  // Outer circle: center (0,0) radius r
+  // Inner circle: center (ox,oy) radius hr — the "cut" circle
+  const ox = r * 0.3, oy = 0, hr = r * 0.78;
+  const N = 48; // points per arc
+  const pts = [];
+
+  // Find intersection angles of the two circles
+  // d = distance between centers
+  const d = Math.sqrt(ox*ox + oy*oy); // = ox since oy=0
+  // Using law of cosines: r² = hr² + d² - 2*hr*d*cos(alpha_inner)
+  const cosA = (d*d + hr*hr - r*r) / (2*d*hr);
+  const cosB = (d*d + r*r  - hr*hr) / (2*d*r);
+  const alphaInner = Math.acos(Math.max(-1, Math.min(1, cosA))); // half-angle at inner center
+  const alphaOuter = Math.acos(Math.max(-1, Math.min(1, cosB))); // half-angle at outer center
+
+  // Angle of inner center from outer center = atan2(oy, ox) = 0 (since oy=0, ox>0)
+  const dir = Math.atan2(oy, ox); // = 0
+
+  // Outer arc: from -alphaOuter to +alphaOuter (the exposed part, going CCW)
+  const outerStart = dir - alphaOuter;  // bottom intersection on outer circle
+  const outerEnd   = dir + alphaOuter;  // top intersection
+  for(let i = 0; i <= N; i++){
+    const a = outerStart + (outerEnd - outerStart) * i / N;
+    pts.push([Math.cos(a)*r, Math.sin(a)*r]);
+  }
+
+  // Inner arc: from alphaInner above dir to -alphaInner (CW = decreasing angle)
+  const innerStart = dir + alphaInner;  // top intersection on inner circle
+  const innerEnd   = dir - alphaInner;  // bottom intersection
+  for(let i = 0; i <= N; i++){
+    const a = innerStart + (innerEnd - innerStart) * i / N; // goes CW
+    pts.push([ox + Math.cos(a)*hr, oy + Math.sin(a)*hr]);
+  }
+
+  const s = new THREE.Shape();
+  s.moveTo(pts[0][0], pts[0][1]);
+  for(let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  s.closePath();
   return s;
 }
+
 function makeButterflyShape(r){
-  const shapes=[];
-  // Upper wings (bigger)
-  const ul=new THREE.Shape();
-  ul.moveTo(0, r*0.1);
-  ul.bezierCurveTo(-r*0.4, r*0.9, -r*1.2, r*0.8, -r*1.0, r*0.1);
-  ul.bezierCurveTo(-r*0.8,-r*0.2, -r*0.3,-r*0.1, 0, r*0.1);
+  const shapes = [];
+  // Upper-left wing
+  const ul = new THREE.Shape();
+  ul.moveTo(-r*0.05,  r*0.15);
+  ul.bezierCurveTo(-r*0.3,  r*0.8, -r*1.1,  r*0.9, -r*1.1, r*0.2);
+  ul.bezierCurveTo(-r*1.0, -r*0.1, -r*0.5, -r*0.15, -r*0.05, r*0.15);
   ul.closePath();
-  const ur=new THREE.Shape();
-  ur.moveTo(0, r*0.1);
-  ur.bezierCurveTo( r*0.4, r*0.9,  r*1.2, r*0.8,  r*1.0, r*0.1);
-  ur.bezierCurveTo( r*0.8,-r*0.2,  r*0.3,-r*0.1,  0, r*0.1);
+  // Upper-right wing (mirror)
+  const ur = new THREE.Shape();
+  ur.moveTo( r*0.05,  r*0.15);
+  ur.bezierCurveTo( r*0.3,  r*0.8,  r*1.1,  r*0.9,  r*1.1, r*0.2);
+  ur.bezierCurveTo( r*1.0, -r*0.1,  r*0.5, -r*0.15,  r*0.05, r*0.15);
   ur.closePath();
-  // Lower wings (smaller)
-  const ll=new THREE.Shape();
-  ll.moveTo(0,-r*0.1);
-  ll.bezierCurveTo(-r*0.5,-r*0.5,-r*0.9,-r*0.8,-r*0.7,-r*0.9);
-  ll.bezierCurveTo(-r*0.4,-r*1.0,-r*0.1,-r*0.5, 0,-r*0.1);
+  // Lower-left wing (smaller, rounder)
+  const ll = new THREE.Shape();
+  ll.moveTo(-r*0.05, -r*0.1);
+  ll.bezierCurveTo(-r*0.4, -r*0.4, -r*0.9, -r*0.7, -r*0.7, -r*0.95);
+  ll.bezierCurveTo(-r*0.45,-r*1.1, -r*0.1, -r*0.55, -r*0.05, -r*0.1);
   ll.closePath();
-  const lr=new THREE.Shape();
-  lr.moveTo(0,-r*0.1);
-  lr.bezierCurveTo( r*0.5,-r*0.5, r*0.9,-r*0.8, r*0.7,-r*0.9);
-  lr.bezierCurveTo( r*0.4,-r*1.0, r*0.1,-r*0.5, 0,-r*0.1);
+  // Lower-right wing
+  const lr = new THREE.Shape();
+  lr.moveTo( r*0.05, -r*0.1);
+  lr.bezierCurveTo( r*0.4, -r*0.4,  r*0.9, -r*0.7,  r*0.7, -r*0.95);
+  lr.bezierCurveTo( r*0.45,-r*1.1,  r*0.1, -r*0.55,  r*0.05, -r*0.1);
   lr.closePath();
-  shapes.push(ul,ur,ll,lr); return shapes;
+  shapes.push(ul, ur, ll, lr);
+  return shapes;
 }
+
 function makeBirdShape(r){
-  // Simple bird body + wing silhouette
-  const s=new THREE.Shape();
-  // Body
-  s.moveTo(r*0.9, 0);
-  s.bezierCurveTo(r*0.7, r*0.25, -r*0.3, r*0.3, -r*0.9, r*0.05);
-  s.bezierCurveTo(-r*0.7,-r*0.2,  r*0.1,-r*0.35, r*0.5,-r*0.2);
-  // Tail
-  s.bezierCurveTo(r*0.6,-r*0.05, r*0.8,-r*0.05, r*0.9, 0);
-  s.closePath();
-  // Wing arc on top
-  const wing=new THREE.Shape();
-  wing.moveTo(-r*0.3, r*0.2);
-  wing.bezierCurveTo(-r*0.1, r*0.7, r*0.4, r*0.7, r*0.5, r*0.2);
-  wing.bezierCurveTo(r*0.3, r*0.15, r*0.0, r*0.15, -r*0.3, r*0.2);
+  const shapes = [];
+  // Body — oval-ish
+  const body = new THREE.Shape();
+  body.moveTo( r * 0.85,  0);
+  body.bezierCurveTo( r*0.6,  r*0.28, -r*0.2,  r*0.32, -r*0.85,  r*0.08);
+  body.bezierCurveTo(-r*0.7, -r*0.18,  r*0.0,  -r*0.3,   r*0.4,  -r*0.18);
+  body.bezierCurveTo( r*0.6, -r*0.08,  r*0.8,  -r*0.04,  r*0.85,  0);
+  body.closePath();
+  // Wing arc (one curved wing on top)
+  const wing = new THREE.Shape();
+  wing.moveTo(-r*0.25, r*0.22);
+  wing.bezierCurveTo(-r*0.05, r*0.72,  r*0.45, r*0.72,  r*0.55, r*0.22);
+  wing.bezierCurveTo( r*0.35, r*0.18,  r*0.05, r*0.18, -r*0.25, r*0.22);
   wing.closePath();
-  return [s, wing];
+  shapes.push(body, wing);
+  return shapes;
 }
+
 function makeRainbowShapes(r){
-  const shapes=[];
-  const radii=[1.0, 0.88, 0.76, 0.64, 0.52];
-  for(let i=0;i<5;i++){
-    const r1=r*radii[i], r2=r1-r*0.1;
-    const arc=new THREE.Shape();
-    // Semicircle: left to right along top (Y-up)
-    arc.moveTo(-r1, 0);
-    arc.absarc(0, 0, r1, Math.PI, 0, true);  // top half, going CW
-    arc.lineTo(r2, 0);
-    arc.absarc(0, 0, r2, 0, Math.PI, false); // inner arc back
-    arc.lineTo(-r1, 0);
+  const shapes = [];
+  const bands = [1.0, 0.87, 0.74, 0.61, 0.48];
+  const thickness = r * 0.1;
+  for(let i = 0; i < bands.length; i++){
+    const ro = r * bands[i];
+    const ri = ro - thickness;
+    const arc = new THREE.Shape();
+    arc.moveTo(-ro, 0);
+    arc.absarc(0, 0, ro, Math.PI, 0, true);   // outer top half (CW = correct winding for Y-up)
+    arc.lineTo(ri, 0);
+    arc.absarc(0, 0, ri, 0, Math.PI, false);   // inner top half back
     arc.closePath();
     shapes.push(arc);
   }
@@ -1240,7 +1306,7 @@ function renderDecoList(){
   const list = document.getElementById('deco-list');
   if(!decoItems.length){ list.style.display='none'; return; }
   list.style.display='';
-  const EMOJI = {star:'⭐',heart:'❤️',diamond:'💎',cloud:'☁️',flower:'🌸',sun:'☀️',moon:'🌙',butterfly:'🦋',bird:'🐦',rainbow:'🌈',_svg:'📐'};
+  const EMOJI = {star:'⭐',heart:'❤️',diamond:'💎',cloud:'☁️',flower:'🌸',sun:'☀️',butterfly:'🦋',rainbow:'🌈',_svg:'📐'};
   list.innerHTML = decoItems.map(d=>`
     <div class="deco-item ${d.id===activeDeco?'active':''}" onclick="setActiveDeco(${d.id})">
       <span class="di-icon">${EMOJI[d.type]||'★'}</span>
