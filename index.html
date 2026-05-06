@@ -586,6 +586,7 @@ function pickBuiltin(key,label){
   fontState[activeSlot]={key,label,parsed:fontCache[key]||null};
   document.getElementById(activeSlot+'-fname').textContent=label;
   closeModal();
+  scheduleRegen(100);
 }
 
 // System fonts
@@ -627,6 +628,7 @@ async function pickSys(family,style){
     fontState[activeSlot]={key:'_system',label,parsed,blob};
     document.getElementById(activeSlot+'-fname').textContent=label;
     closeModal();
+    scheduleRegen(100);
   }catch(e){setSt('❌ '+e.message);}
 }
 
@@ -647,7 +649,7 @@ async function handleFile(file){
     fontState[activeSlot]={key:'_upload',label,parsed:null};
     document.getElementById(activeSlot+'-fname').textContent=label;
     st.className='fst ok';st.textContent='✓ '+file.name;
-    setTimeout(closeModal,600);
+    setTimeout(()=>{ closeModal(); scheduleRegen(200); },600);
   }catch(e){st.className='fst err';st.textContent='❌ '+e.message;}
 }
 
@@ -890,7 +892,10 @@ function mergeT(meshes){
 const setSt=m=>document.getElementById('st-msg').textContent=m;
 
 async function generate(){
-  setSt('Gerando…');
+  setSt('Atualizando…');
+  // Flash the btn-gen slightly to indicate background update
+  const genBtn = document.getElementById('btn-gen');
+  if(genBtn) genBtn.style.opacity='0.7';
   try{
     const bt=document.getElementById('bg-txt').value||'A';
     const ft=document.getElementById('fg-txt').value||'texto';
@@ -920,7 +925,11 @@ async function generate(){
     document.getElementById('bd-bg').textContent=bt;
     document.getElementById('bd-fg').textContent=ft;
     setSt('Pronto ✓');
-  }catch(e){console.error(e);setSt('❌ '+e.message);}
+    if(genBtn) genBtn.style.opacity='';
+  }catch(e){
+    console.error(e);setSt('❌ '+e.message);
+    if(genBtn) genBtn.style.opacity='';
+  }
 }
 
 document.getElementById('btn-gen').onclick=generate;
@@ -938,8 +947,24 @@ document.getElementById('btn-dl-all').onclick=()=>{if(!lastBg){alert('Gere o pre
     });
   });
 });
+// ── Debounced live regeneration ──
+let _regenTimer = null;
+function scheduleRegen(delay=300){
+  clearTimeout(_regenTimer);
+  _regenTimer = setTimeout(generate, delay);
+}
+
+// Sliders: update display value AND schedule regen
 [['bg-sz','bg-sz-v'],['bg-dp','bg-dp-v'],['fg-sz','fg-sz-v'],['fg-dp','fg-dp-v'],['base-dp','base-dp-v']].forEach(([id,vid])=>{
-  document.getElementById(id).addEventListener('input',()=>document.getElementById(vid).textContent=document.getElementById(id).value);
+  document.getElementById(id).addEventListener('input',()=>{
+    document.getElementById(vid).textContent = document.getElementById(id).value;
+    scheduleRegen(250);
+  });
+});
+
+// Text inputs: regen after user stops typing
+['bg-txt','fg-txt'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', ()=>scheduleRegen(600));
 });
 
 
@@ -1746,6 +1771,9 @@ window.addEventListener('load', async () => {
   // Fit canvas one more time after overlay hidden
   fitCanvas();
   generate();
+
+  // Live update for checkbox (base support)
+  document.getElementById('add-base').addEventListener('change', ()=>scheduleRegen(100));
 });
 
 // Keep canvas sized on window resize
