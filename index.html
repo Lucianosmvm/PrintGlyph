@@ -181,6 +181,20 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
   touch-action:manipulation;}
 .font-sel-btn:hover{border-color:var(--acc)}
 
+/* SVG UPLOAD */
+.svg-upload-area{
+  display:flex;align-items:center;gap:8px;
+  border:1.5px dashed var(--bord);border-radius:8px;
+  padding:9px 12px;cursor:pointer;margin-top:4px;
+  transition:border-color .2s,background .2s;
+  background:var(--bg);
+}
+.svg-upload-area:hover,.svg-upload-area.drag{border-color:var(--acc);background:rgba(232,85,122,.05)}
+.svg-upload-area input{display:none}
+.svg-icon{font-size:20px;flex-shrink:0}
+.svg-label{font-size:12px;color:var(--txt2)}
+.svg-label b{color:var(--txt)}
+
 /* DECO */
 .deco-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:6px}
 .deco-btn{background:var(--surf);border:1.5px solid var(--bord);border-radius:8px;
@@ -410,6 +424,15 @@ input[type=range].zr::-webkit-slider-thumb{background:#60a5fa}
       <div class="deco-btn" title="Borboleta" onclick="addDeco('butterfly','Borboleta')">🦋</div>
       <div class="deco-btn" title="Pássaro"   onclick="addDeco('bird','Pássaro')">🐦</div>
       <div class="deco-btn" title="Arco-íris" onclick="addDeco('rainbow','Arco-íris')">🌈</div>
+    </div>
+    <div style="margin-top:6px">
+      <label style="margin-top:0">SVG → 3D</label>
+      <div class="svg-upload-area" id="svg-drop" onclick="document.getElementById('svg-file').click()">
+        <input type="file" id="svg-file" accept=".svg,image/svg+xml">
+        <span class="svg-icon">📐</span>
+        <span class="svg-label">Clique ou arraste um <b>.svg</b></span>
+      </div>
+      <div id="svg-status" class="fst" style="display:none"></div>
     </div>
     <div id="deco-list" class="deco-list" style="display:none"></div>
     <div id="deco-props" style="display:none">
@@ -1182,7 +1205,7 @@ function renderDecoList(){
   const list = document.getElementById('deco-list');
   if(!decoItems.length){ list.style.display='none'; return; }
   list.style.display='';
-  const EMOJI = {star:'⭐',heart:'❤️',diamond:'💎',cloud:'☁️',flower:'🌸',sun:'☀️',moon:'🌙',butterfly:'🦋',bird:'🐦',rainbow:'🌈'};
+  const EMOJI = {star:'⭐',heart:'❤️',diamond:'💎',cloud:'☁️',flower:'🌸',sun:'☀️',moon:'🌙',butterfly:'🦋',bird:'🐦',rainbow:'🌈',_svg:'📐'};
   list.innerHTML = decoItems.map(d=>`
     <div class="deco-item ${d.id===activeDeco?'active':''}" onclick="setActiveDeco(${d.id})">
       <span class="di-icon">${EMOJI[d.type]||'★'}</span>
@@ -1251,6 +1274,415 @@ function getAllMeshes(){
   decoItems.forEach(d=>meshes.push(d.mesh));
   return meshes;
 }
+
+
+
+// ══════════════════════════════════════════════════════
+// SVG → 3D SYSTEM
+// ══════════════════════════════════════════════════════
+
+// ── SVG path command parser ──
+function parseSVGPathD(d) {
+  // Tokenize SVG path data into [cmd, ...args] segments
+  const re = /([MmZzLlHhVvCcSsQqTtAa])([^MmZzLlHhVvCcSsQqTtAa]*)/g;
+  const segments = [];
+  let m;
+  while ((m = re.exec(d)) !== null) {
+    const cmd = m[1];
+    const args = m[2].trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    segments.push({ cmd, args });
+  }
+  return segments;
+}
+
+// ── Convert SVG path segments → THREE.Shape (with holes) ──
+function svgSegmentsToShapes(segments) {
+  const allPaths = [];
+  let cur = null;
+  let cx = 0, cy = 0;   // current point
+  let sx = 0, sy = 0;   // subpath start
+  let cpx = 0, cpy = 0; // last control point (for S/s, T/t)
+  let lastCmd = '';
+
+  for (const { cmd, args } of segments) {
+    const upper = cmd.toUpperCase();
+    const rel = cmd === cmd.toLowerCase() && upper !== 'Z';
+
+    const ax = (i) => rel ? cx + args[i] : args[i];
+    const ay = (i) => rel ? cy + args[i] : args[i];
+
+    switch (upper) {
+      case 'M': {
+        if (cur) allPaths.push(cur);
+        cur = new THREE.Path();
+        const px = ax(0), py = -ay(1);
+        cur.moveTo(px, py); cx = ax(0); cy = ay(1); sx = cx; sy = cy;
+        // Implicit L after M
+        for (let i = 2; i < args.length; i += 2) {
+          const lx = rel ? cx + args[i] : args[i];
+          const ly = rel ? cy + args[i+1] : args[i+1];
+          cur.lineTo(lx, -ly); cx = lx; cy = ly;
+        }
+        break;
+      }
+      case 'Z':
+        if (cur) { cur.closePath(); cx = sx; cy = sy; }
+        break;
+      case 'L':
+        for (let i = 0; i < args.length; i += 2) {
+          const lx = rel ? cx + args[i] : args[i];
+          const ly = rel ? cy + args[i+1] : args[i+1];
+          if (cur) cur.lineTo(lx, -ly); cx = lx; cy = ly;
+        }
+        break;
+      case 'H':
+        for (let i = 0; i < args.length; i++) {
+          const lx = rel ? cx + args[i] : args[i];
+          if (cur) cur.lineTo(lx, -cy); cx = lx;
+        }
+        break;
+      case 'V':
+        for (let i = 0; i < args.length; i++) {
+          const ly = rel ? cy + args[i] : args[i];
+          if (cur) cur.lineTo(cx, -ly); cy = ly;
+        }
+        break;
+      case 'C':
+        for (let i = 0; i < args.length; i += 6) {
+          const x1 = rel ? cx+args[i]   : args[i];
+          const y1 = rel ? cy+args[i+1] : args[i+1];
+          const x2 = rel ? cx+args[i+2] : args[i+2];
+          const y2 = rel ? cy+args[i+3] : args[i+3];
+          const x  = rel ? cx+args[i+4] : args[i+4];
+          const y  = rel ? cy+args[i+5] : args[i+5];
+          if (cur) cur.bezierCurveTo(x1,-y1,x2,-y2,x,-y);
+          cpx = x2; cpy = y2; cx = x; cy = y;
+        }
+        break;
+      case 'S': {
+        for (let i = 0; i < args.length; i += 4) {
+          // Reflection of last control point
+          const x1 = (lastCmd==='C'||lastCmd==='S') ? 2*cx-cpx : cx;
+          const y1 = (lastCmd==='C'||lastCmd==='S') ? 2*cy-cpy : cy;
+          const x2 = rel ? cx+args[i]   : args[i];
+          const y2 = rel ? cy+args[i+1] : args[i+1];
+          const x  = rel ? cx+args[i+2] : args[i+2];
+          const y  = rel ? cy+args[i+3] : args[i+3];
+          if (cur) cur.bezierCurveTo(x1,-y1,x2,-y2,x,-y);
+          cpx = x2; cpy = y2; cx = x; cy = y;
+        }
+        break;
+      }
+      case 'Q':
+        for (let i = 0; i < args.length; i += 4) {
+          const x1 = rel ? cx+args[i]   : args[i];
+          const y1 = rel ? cy+args[i+1] : args[i+1];
+          const x  = rel ? cx+args[i+2] : args[i+2];
+          const y  = rel ? cy+args[i+3] : args[i+3];
+          if (cur) cur.quadraticCurveTo(x1,-y1,x,-y);
+          cpx = x1; cpy = y1; cx = x; cy = y;
+        }
+        break;
+      case 'T': {
+        for (let i = 0; i < args.length; i += 2) {
+          const x1 = (lastCmd==='Q'||lastCmd==='T') ? 2*cx-cpx : cx;
+          const y1 = (lastCmd==='Q'||lastCmd==='T') ? 2*cy-cpy : cy;
+          const x  = rel ? cx+args[i]   : args[i];
+          const y  = rel ? cy+args[i+1] : args[i+1];
+          if (cur) cur.quadraticCurveTo(x1,-y1,x,-y);
+          cpx = x1; cpy = y1; cx = x; cy = y;
+        }
+        break;
+      }
+      case 'A': {
+        // Arc: approximate with bezier via SVG arc → center parameterization
+        for (let i = 0; i < args.length; i += 7) {
+          const rx = Math.abs(rel ? args[i] : args[i]);
+          const ry = Math.abs(rel ? args[i+1] : args[i+1]);
+          const xRot = args[i+2] * Math.PI/180;
+          const largeArc = args[i+3];
+          const sweep = args[i+4];
+          const ex = rel ? cx+args[i+5] : args[i+5];
+          const ey = rel ? cy+args[i+6] : args[i+6];
+          // Use THREE.Path arc approximation
+          if (cur) {
+            const pts = svgArcToBeziers(cx,cy,rx,ry,xRot,largeArc,sweep,ex,ey);
+            pts.forEach(p=>cur.bezierCurveTo(p[0],-p[1],p[2],-p[3],p[4],-p[5]));
+          }
+          cx = ex; cy = ey;
+        }
+        break;
+      }
+    }
+    lastCmd = upper;
+  }
+  if (cur) allPaths.push(cur);
+  return allPaths;
+}
+
+// ── SVG arc segment to bezier approximation ──
+function svgArcToBeziers(x1,y1,rx,ry,phi,fa,fs,x2,y2){
+  if(rx===0||ry===0) return [];
+  const cos=Math.cos(phi),sin=Math.sin(phi);
+  const mx=(x1-x2)/2, my=(y1-y2)/2;
+  const tx= cos*mx+sin*my, ty=-sin*mx+cos*my;
+  let rxSq=rx*rx,rySq=ry*ry,txSq=tx*tx,tySq=ty*ty;
+  const radiiCheck=txSq/rxSq+tySq/rySq;
+  if(radiiCheck>1){const s=Math.sqrt(radiiCheck);rx*=s;ry*=s;rxSq=rx*rx;rySq=ry*ry;}
+  const n=rxSq*tySq+rySq*txSq;
+  const d=rxSq*rySq-n;
+  const sq=Math.sqrt(Math.max(0,d/n));
+  const sign=(fa===fs)?-1:1;
+  const cx0=sign*sq*(rx*ty/ry), cy0=sign*sq*(-ry*tx/rx);
+  const cx=(x1+x2)/2+cos*cx0-sin*cy0;
+  const cy=(y1+y2)/2+sin*cx0+cos*cy0;
+  const ux=(tx-cx0)/rx, uy=(ty-cy0)/ry;
+  const vx=(-tx-cx0)/rx, vy=(-ty-cy0)/ry;
+  let ang1=Math.atan2(uy,ux);
+  let dang=Math.atan2(vy,vx)-ang1;
+  if(!fs&&dang>0) dang-=2*Math.PI;
+  if(fs&&dang<0) dang+=2*Math.PI;
+  const segs=Math.ceil(Math.abs(dang)/(Math.PI/2));
+  const da=dang/segs;
+  const beziers=[];
+  const alpha=Math.sin(da)*(Math.sqrt(4+3*Math.tan(da/2)**2)-1)/3;
+  let ax=Math.cos(ang1)*rx, ay=Math.sin(ang1)*ry;
+  let dx=-Math.sin(ang1)*rx*alpha, dy=Math.cos(ang1)*ry*alpha;
+  for(let i=0;i<segs;i++){
+    const ang=ang1+(i+1)*da;
+    const bx=Math.cos(ang)*rx, by=Math.sin(ang)*ry;
+    const ex=-Math.sin(ang)*rx*alpha, ey=Math.cos(ang)*ry*alpha;
+    const x1b=cx+cos*ax-sin*ay, y1b=cy+sin*ax+cos*ay;
+    const x2b=cx+cos*(ax+dx)-sin*(ay+dy), y2b=cy+sin*(ax+dx)+cos*(ay+dy);
+    const xb=cx+cos*(bx-ex)-sin*(by-ey), yb=cy+sin*(bx-ex)+cos*(by-ey);
+    beziers.push([x2b,y2b,xb-cos*ex+sin*ey,yb-sin*ex-cos*ey,xb,yb]);
+    ax=bx;ay=by;dx=ex;dy=ey;
+  }
+  return beziers;
+}
+
+// ── Signed area for winding test ──
+function svgSignedArea(path){
+  const pts=path.getPoints(8);
+  let a=0;
+  for(let i=0;i<pts.length;i++){
+    const j=(i+1)%pts.length;
+    a+=pts[i].x*pts[j].y-pts[j].x*pts[i].y;
+  }
+  return a/2;
+}
+
+// ── Apply transform matrix to path points ──
+function parseSVGTransform(t){
+  if(!t) return null;
+  const mat=new THREE.Matrix3();
+  const m=t.match(/matrix\(([^)]+)\)/);
+  if(m){
+    const v=m[1].split(/[\s,]+/).map(Number);
+    mat.set(v[0],v[2],v[4], v[1],v[3],v[5], 0,0,1);
+    return mat;
+  }
+  const tr=t.match(/translate\(([^)]+)\)/);
+  if(tr){
+    const v=tr[1].split(/[\s,]+/).map(Number);
+    mat.set(1,0,v[0], 0,1,v[1]||0, 0,0,1);
+    return mat;
+  }
+  const sc=t.match(/scale\(([^)]+)\)/);
+  if(sc){
+    const v=sc[1].split(/[\s,]+/).map(Number);
+    mat.set(v[0],0,0, 0,v[1]||v[0],0, 0,0,1);
+    return mat;
+  }
+  return null;
+}
+
+// ── Main: parse SVG text → THREE.BufferGeometry ──
+function svgToGeometry(svgText, depth, targetSize) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, 'image/svg+xml');
+  const svgEl = doc.querySelector('svg');
+  if (!svgEl) throw new Error('SVG inválido');
+
+  // Get viewBox for scaling
+  let vbX=0,vbY=0,vbW=0,vbH=0;
+  const vb = svgEl.getAttribute('viewBox');
+  if (vb) {
+    [vbX,vbY,vbW,vbH] = vb.split(/[\s,]+/).map(Number);
+  } else {
+    vbW = parseFloat(svgEl.getAttribute('width')||'100');
+    vbH = parseFloat(svgEl.getAttribute('height')||'100');
+  }
+  if(!vbW||!vbH) {vbW=100;vbH=100;}
+
+  // Collect all path elements (including inside groups)
+  const pathEls = [...doc.querySelectorAll('path,circle,rect,ellipse,polygon,polyline')];
+  if (!pathEls.length) throw new Error('Nenhum path encontrado no SVG');
+
+  const allPaths = [];
+
+  for (const el of pathEls) {
+    let d = '';
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === 'path') {
+      d = el.getAttribute('d') || '';
+    } else if (tag === 'circle') {
+      const cx=+el.getAttribute('cx')||0, cy=+el.getAttribute('cy')||0, r=+el.getAttribute('r')||0;
+      d=`M${cx-r},${cy} A${r},${r},0,1,0,${cx+r},${cy} A${r},${r},0,1,0,${cx-r},${cy}Z`;
+    } else if (tag === 'rect') {
+      const x=+el.getAttribute('x')||0, y=+el.getAttribute('y')||0;
+      const w=+el.getAttribute('width')||0, h=+el.getAttribute('height')||0;
+      const rx=+el.getAttribute('rx')||0;
+      if(rx>0){d=`M${x+rx},${y} H${x+w-rx} Q${x+w},${y},${x+w},${y+rx} V${y+h-rx} Q${x+w},${y+h},${x+w-rx},${y+h} H${x+rx} Q${x},${y+h},${x},${y+h-rx} V${y+rx} Q${x},${y},${x+rx},${y}Z`;}
+      else{d=`M${x},${y} H${x+w} V${y+h} H${x} Z`;}
+    } else if (tag === 'ellipse') {
+      const cx=+el.getAttribute('cx')||0, cy=+el.getAttribute('cy')||0;
+      const rx=+el.getAttribute('rx')||0, ry=+el.getAttribute('ry')||0;
+      d=`M${cx-rx},${cy} A${rx},${ry},0,1,0,${cx+rx},${cy} A${rx},${ry},0,1,0,${cx-rx},${cy}Z`;
+    } else if (tag === 'polygon' || tag === 'polyline') {
+      const pts=(el.getAttribute('points')||'').trim().split(/[\s,]+/).map(Number);
+      if(pts.length>=4){
+        d='M'+pts[0]+','+pts[1];
+        for(let i=2;i<pts.length;i+=2) d+=' L'+pts[i]+','+pts[i+1];
+        if(tag==='polygon') d+='Z';
+      }
+    }
+    if (!d) continue;
+
+    const segs = parseSVGPathD(d);
+    const paths = svgSegmentsToShapes(segs);
+    allPaths.push(...paths);
+  }
+
+  if (!allPaths.length) throw new Error('Nenhum contorno extraído');
+
+  // Scale to targetSize
+  const scale = targetSize / Math.max(vbW, vbH);
+
+  // Convert paths to Shapes with correct winding (holes detection)
+  const areas = allPaths.map(p => ({path:p, area: svgSignedArea(p)}));
+  const sorted = [...areas].sort((a,b)=>Math.abs(b.area)-Math.abs(a.area));
+  const domSign = sorted.length ? Math.sign(sorted[0].area) : 1;
+
+  const extPaths = areas.filter(a=>Math.sign(a.area)===domSign||Math.abs(a.area)<0.01);
+  const holePaths = areas.filter(a=>Math.sign(a.area)!==domSign&&Math.abs(a.area)>0.01);
+
+  // Build shapes
+  const shapes = extPaths.map(({path})=>{
+    const s = new THREE.Shape();
+    const pts = path.getPoints(16).map(p=>new THREE.Vector2(p.x*scale, p.y*scale));
+    s.setFromPoints(pts);
+    return s;
+  });
+
+  // Assign holes
+  for (const {path} of holePaths) {
+    const hPts = path.getPoints(16).map(p=>new THREE.Vector2(p.x*scale, p.y*scale));
+    const testPt = hPts[Math.floor(hPts.length/2)] || hPts[0];
+    if (!testPt) continue;
+    // Find containing shape (simple bounding box test)
+    let best = shapes[0];
+    for (const s of shapes) {
+      const spts = s.getPoints(4);
+      const xs = spts.map(p=>p.x), ys = spts.map(p=>p.y);
+      const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+      if(testPt.x>=minX&&testPt.x<=maxX&&testPt.y>=minY&&testPt.y<=maxY){best=s;break;}
+    }
+    if (best) {
+      const hole = new THREE.Path();
+      hole.setFromPoints(hPts);
+      best.holes.push(hole);
+    }
+  }
+
+  const geo = new THREE.ExtrudeGeometry(shapes, {
+    depth, bevelEnabled: true,
+    bevelThickness: Math.min(depth*.05,.8),
+    bevelSize: Math.min(depth*.03,.5),
+    bevelSegments: 2, curveSegments: 16,
+  });
+
+  // Center it
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  geo.translate(-(bb.max.x+bb.min.x)/2, -(bb.max.y+bb.min.y)/2, 0);
+  return geo;
+}
+
+// ── SVG Upload Handler ──
+const svgDrop = document.getElementById('svg-drop');
+const svgFile = document.getElementById('svg-file');
+const svgStatus = document.getElementById('svg-status');
+
+svgDrop.addEventListener('dragover', e=>{e.preventDefault();svgDrop.classList.add('drag');});
+svgDrop.addEventListener('dragleave', ()=>svgDrop.classList.remove('drag'));
+svgDrop.addEventListener('drop', e=>{
+  e.preventDefault(); svgDrop.classList.remove('drag');
+  if(e.dataTransfer.files[0]) handleSVGFile(e.dataTransfer.files[0]);
+});
+svgFile.addEventListener('change', e=>{ if(e.target.files[0]) handleSVGFile(e.target.files[0]); });
+
+async function handleSVGFile(file){
+  if(!file.name.toLowerCase().endsWith('.svg') && file.type!=='image/svg+xml'){
+    svgStatus.className='fst err';svgStatus.style.display='block';
+    svgStatus.textContent='❌ Use um arquivo .svg';return;
+  }
+  svgStatus.className='fst ld';svgStatus.style.display='block';
+  svgStatus.textContent='Processando '+file.name+'…';
+
+  try{
+    const text = await file.text();
+    const size = +document.getElementById('deco-sz').value || 20;
+    const depth= +document.getElementById('deco-dp').value || 5;
+    const color= activeDecoColor;
+
+    const geo = svgToGeometry(text, depth, size);
+    const mat = new THREE.MeshPhongMaterial({color:new THREE.Color(color),shininess:45});
+    const mesh= new THREE.Mesh(geo, mat);
+    mesh.castShadow=true;
+
+    const bdp=+document.getElementById('bg-dp').value;
+    mesh.position.set(0, 0, bdp+.8);
+    scene.add(mesh);
+
+    // Shorten name
+    const label = file.name.replace('.svg','').slice(0,16);
+    const id = ++decoIdCounter;
+    decoItems.push({id, type:'_svg', label, mesh, color, size, depth, pos:{x:0,y:0,z:0}, svgText:text});
+    setActiveDeco(id);
+    renderDecoList();
+
+    svgStatus.className='fst ok';
+    svgStatus.textContent='✓ '+file.name+' adicionado ao canvas!';
+  }catch(e){
+    console.error(e);
+    svgStatus.className='fst err';
+    svgStatus.textContent='❌ '+e.message;
+  }
+}
+
+// ── Rebuild SVG geometry when size/depth changes ──
+const _origBuildDecoGeo = buildDecoGeo;
+// Override removeDeco to also handle svg type properly (already works generically)
+
+// Patch deco sz/dp sliders to rebuild SVG too
+document.getElementById('deco-sz').addEventListener('input',function(){
+  const d=decoItems.find(x=>x.id===activeDeco); if(!d||d.type!=='_svg')return;
+  d.size=+this.value;
+  const pos=d.mesh.position.clone();
+  scene.remove(d.mesh);d.mesh.geometry.dispose();
+  try{d.mesh.geometry=svgToGeometry(d.svgText,d.depth,d.size);}catch(e){}
+  d.mesh.position.copy(pos);scene.add(d.mesh);
+},{capture:false});
+document.getElementById('deco-dp').addEventListener('input',function(){
+  const d=decoItems.find(x=>x.id===activeDeco); if(!d||d.type!=='_svg')return;
+  d.depth=+this.value;
+  const pos=d.mesh.position.clone();
+  scene.remove(d.mesh);d.mesh.geometry.dispose();
+  try{d.mesh.geometry=svgToGeometry(d.svgText,d.depth,d.size);}catch(e){}
+  d.mesh.position.copy(pos);scene.add(d.mesh);
+},{capture:false});
 
 
 // ── MOBILE COLLAPSIBLE SECTIONS ──
